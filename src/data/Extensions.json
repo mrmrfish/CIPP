@@ -29,8 +29,8 @@
     "mappingRequired": true,
     "links": [
       {
-        "name": "Sherweb Cloud Services for MSPs",
-        "url": "https://info.sherweb.com/sherweb-cloud-services-for-msps"
+        "name": "Sherweb CIPP Integration",
+        "url": "https://info.sherweb.com/sherweb-cipp-integration"
       }
     ],
     "SettingOptions": [
@@ -623,6 +623,18 @@
           "field": "CFZTNA.Enabled",
           "compareType": "is",
           "compareValue": true
+        }
+      },
+      {
+        "type": "datePicker",
+        "name": "Hudu.NextSync",
+        "label": "Reschedule next sync date",
+        "helperText": "Set a future date to delay the next scheduled sync. Leave blank to sync during the next scheduled sync.",
+        "condition": {
+          "field": "Hudu.Enabled",
+          "compareType": "is",
+          "compareValue": true,
+          "action": "disable"
         }
       }
     ],

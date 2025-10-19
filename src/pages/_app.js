@@ -16,7 +16,7 @@ import { useMediaPredicate } from "react-media-hook";
 import Error500 from "./500";
 import { ErrorBoundary } from "react-error-boundary";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFnsV3";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import TimeAgo from "javascript-time-ago";
 import en from "javascript-time-ago/locale/en.json";
 import CippSpeedDial from "../components/CippComponents/CippSpeedDial";
@@ -27,6 +27,7 @@ import {
   AutoStories,
   Gavel,
   Celebration,
+  ClearAll as ClearAllIcon,
 } from "@mui/icons-material";
 import { SvgIcon } from "@mui/material";
 import discordIcon from "../../public/discord-mark-blue.svg";
@@ -196,6 +197,29 @@ const App = (props) => {
           },
         ]
       : []), // toRemove
+    {
+      // add clear cache action that removes the persisted query cache from local storage and reloads the page
+      id: "clearCache",
+      icon: <ClearAllIcon />,
+      name: "Clear Cache and Reload",
+      onClick: () => {
+        // Clear the TanStack Query cache
+        queryClient.clear();
+
+        // Remove persisted cache from localStorage
+        if (typeof window !== "undefined") {
+          // Remove the persisted query cache keys
+          Object.keys(localStorage).forEach((key) => {
+            if (key.startsWith("REACT_QUERY_OFFLINE_CACHE")) {
+              localStorage.removeItem(key);
+            }
+          });
+        }
+
+        // Force refresh the page to bypass browser cache and reload JavaScript
+        window.location.reload(true);
+      },
+    },
     {
       id: "license",
       icon: <Gavel />,

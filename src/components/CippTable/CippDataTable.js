@@ -15,7 +15,7 @@ import { Scrollbar } from "../scrollbar";
 import { useEffect, useMemo, useState } from "react";
 import { ApiGetCallWithPagination } from "../../api/ApiCall";
 import { utilTableMode } from "./util-tablemode";
-import { utilColumnsFromAPI } from "./util-columnsFromAPI";
+import { utilColumnsFromAPI, resolveSimpleColumnVariables } from "./util-columnsFromAPI";
 import { CIPPTableToptoolbar } from "./CIPPTableToptoolbar";
 import { Info, More, MoreHoriz } from "@mui/icons-material";
 import { CippOffCanvas } from "../CippComponents/CippOffCanvas";
@@ -56,6 +56,7 @@ export const CippDataTable = (props) => {
     filters,
     maxHeightOffset = "380px",
     defaultSorting = [],
+    isInDialog = false,
   } = props;
   const [columnVisibility, setColumnVisibility] = useState(initialColumnVisibility);
   const [configuredSimpleColumns, setConfiguredSimpleColumns] = useState(simpleColumns);
@@ -150,15 +151,31 @@ export const CippDataTable = (props) => {
     let finalColumns = [];
     let newVisibility = { ...columnVisibility };
 
+    // Check if we're in AllTenants mode and data has Tenant property
+    const isAllTenants = settings?.currentTenant === "AllTenants";
+    const hasTenantProperty = usedData.some(
+      (row) => row && typeof row === "object" && "Tenant" in row
+    );
+    const shouldShowTenant = isAllTenants && hasTenantProperty;
+
     if (columns.length === 0 && configuredSimpleColumns.length === 0) {
       finalColumns = apiColumns;
       apiColumns.forEach((col) => {
         newVisibility[col.id] = true;
       });
     } else if (configuredSimpleColumns.length > 0) {
-      finalColumns = apiColumns.map((col) => {
-        newVisibility[col.id] = configuredSimpleColumns.includes(col.id);
-        return col;
+      // Resolve any variables in the simple columns before checking visibility
+      const resolvedSimpleColumns = resolveSimpleColumnVariables(configuredSimpleColumns, usedData);
+
+      // Add Tenant to resolved columns if in AllTenants mode and not already included
+      let finalResolvedColumns = [...resolvedSimpleColumns];
+      if (shouldShowTenant && !resolvedSimpleColumns.includes("Tenant")) {
+        finalResolvedColumns = [...resolvedSimpleColumns, "Tenant"];
+      }
+
+      finalColumns = apiColumns;
+      finalColumns.forEach((col) => {
+        newVisibility[col.id] = finalResolvedColumns.includes(col.id);
       });
     } else {
       const providedColumnKeys = new Set(columns.map((col) => col.id || col.header));
@@ -166,13 +183,22 @@ export const CippDataTable = (props) => {
       finalColumns.forEach((col) => {
         newVisibility[col.accessorKey] = providedColumnKeys.has(col.id);
       });
+
+      // Handle Tenant column for custom columns case
+      if (shouldShowTenant) {
+        const tenantColumn = finalColumns.find((col) => col.id === "Tenant");
+        if (tenantColumn) {
+          // Make tenant visible
+          newVisibility["Tenant"] = true;
+        }
+      }
     }
     if (defaultSorting?.length > 0) {
       setSorting(defaultSorting);
     }
     setUsedColumns(finalColumns);
     setColumnVisibility(newVisibility);
-  }, [columns.length, usedData, queryKey]);
+  }, [columns.length, usedData, queryKey, settings?.currentTenant]);
 
   const createDialog = useDialog();
 
@@ -413,6 +439,8 @@ export const CippDataTable = (props) => {
               graphFilterData={graphFilterData}
               setGraphFilterData={setGraphFilterData}
               setConfiguredSimpleColumns={setConfiguredSimpleColumns}
+              queueMetadata={getRequestData.data?.pages?.[0]?.Metadata}
+              isInDialog={isInDialog}
             />
           )}
         </>
@@ -432,6 +460,37 @@ export const CippDataTable = (props) => {
           return -1;
         }
         return aVal > bVal ? 1 : -1;
+      },
+      number: (a, b, id) => {
+        const aVal = a?.original?.[id] ?? null;
+        const bVal = b?.original?.[id] ?? null;
+        if (aVal === null && bVal === null) {
+          return 0;
+        }
+        if (aVal === null) {
+          return 1;
+        }
+        if (bVal === null) {
+          return -1;
+        }
+        return aVal - bVal;
+      },
+      boolean: (a, b, id) => {
+        const aVal = a?.original?.[id] ?? null;
+        const bVal = b?.original?.[id] ?? null;
+        if (aVal === null && bVal === null) {
+          return 0;
+        }
+        if (aVal === null) {
+          return 1;
+        }
+        if (bVal === null) {
+          return -1;
+        }
+        // Convert to numbers: true = 1, false = 0
+        const aNum = aVal === true ? 1 : 0;
+        const bNum = bVal === true ? 1 : 0;
+        return aNum - bNum;
       },
     },
     filterFns: {

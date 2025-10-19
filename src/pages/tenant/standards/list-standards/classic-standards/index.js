@@ -9,6 +9,9 @@ import { Grid } from "@mui/system";
 import { CippApiResults } from "../../../../../components/CippComponents/CippApiResults";
 import { EyeIcon } from "@heroicons/react/24/outline";
 import tabOptions from "../tabOptions.json";
+import { useSettings } from "/src/hooks/use-settings.js";
+import { CippPolicyImportDrawer } from "../../../../../components/CippComponents/CippPolicyImportDrawer.jsx";
+import { PermissionButton } from "/src/utils/permissions.js";
 
 const Page = () => {
   const oldStandards = ApiGetCall({ url: "/api/ListStandards", queryKey: "ListStandards-legacy" });
@@ -18,11 +21,14 @@ const Page = () => {
     refetchOnMount: false,
     refetchOnReconnect: false,
   });
+
+  const currentTenant = useSettings().currentTenant;
   const pageTitle = "Templates";
+  const cardButtonPermissions = ["Tenant.Standards.ReadWrite"];
   const actions = [
     {
       label: "View Tenant Report",
-      link: "/tenant/standards/manage-drift/compare?templateId=[GUID]",
+      link: "/tenant/manage/applied-standards/?templateId=[GUID]",
       icon: <EyeIcon />,
       color: "info",
       target: "_self",
@@ -51,11 +57,12 @@ const Page = () => {
       data: {
         id: "GUID",
       },
-      confirmText: "Are you sure you want to create a drift clone of [templateName]? This will create a new drift template based on this template.",
+      confirmText:
+        "Are you sure you want to create a drift clone of [templateName]? This will create a new drift template based on this template.",
       multiPost: false,
     },
     {
-      label: "Run Template Now (Currently Selected Tenant only)",
+      label: `Run Template Now (${currentTenant || "Currently Selected Tenant"})`,
       type: "GET",
       url: "/api/ExecStandardsRun",
       icon: <PlayArrow />,
@@ -179,9 +186,20 @@ const Page = () => {
           <Button component={Link} href="../template" startIcon={<AddBox />} sx={{ mr: 1 }}>
             Add Template
           </Button>
-          <Button component={Link} href="../template?type=drift" startIcon={<AddBox />}>
+          <Button
+            component={Link}
+            href="../template?type=drift"
+            startIcon={<AddBox />}
+            sx={{ mr: 1 }}
+          >
             Create Drift Template
           </Button>
+          <CippPolicyImportDrawer
+            buttonText="Browse Catalog"
+            requiredPermissions={cardButtonPermissions}
+            PermissionButton={PermissionButton}
+            mode="Standards"
+          />
         </>
       }
       actions={actions}
