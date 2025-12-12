@@ -1,6 +1,6 @@
 {
   "name": "cipp",
-  "version": "8.5.2",
+  "version": "8.7.1",
   "author": "CIPP Contributors",
   "homepage": "https://cipp.app/",
   "bugs": {
@@ -101,6 +101,8 @@
     "redux-devtools-extension": "2.13.9",
     "redux-persist": "^6.0.0",
     "redux-thunk": "3.1.0",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^3.0.1",
     "simplebar": "6.3.2",
     "simplebar-react": "3.3.2",
     "stylis-plugin-rtl": "2.1.1",

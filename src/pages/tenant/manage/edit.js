@@ -174,7 +174,6 @@ const Page = () => {
     <HeaderedTabbedLayout
       tabOptions={tabOptions}
       title={title}
-      backUrl="/tenant/standards/list-standards"
       actions={[]}
       actionsData={{}}
       isFetching={tenantDetails.isFetching}
@@ -191,6 +190,10 @@ const Page = () => {
                 {
                   label: "Tenant ID",
                   value: getCippFormatting(tenantDetails.data?.id, "Tenant"),
+                },
+                {
+                  label: "Default Domain",
+                  value: currentTenant,
                 },
               ]}
               showDivider={false}
