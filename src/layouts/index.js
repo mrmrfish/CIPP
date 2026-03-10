@@ -64,6 +64,8 @@ const LayoutRoot = styled("div")(({ theme }) => ({
   display: "flex",
   flex: "1 1 auto",
   maxWidth: "100%",
+  height: "100vh",
+  overflow: "hidden",
   paddingTop: TOP_NAV_HEIGHT,
   [theme.breakpoints.up("lg")]: {
     paddingLeft: SIDE_NAV_WIDTH,
@@ -75,6 +77,8 @@ const LayoutContainer = styled("div")({
   flex: "1 1 auto",
   flexDirection: "column",
   width: "100%",
+  overflowY: "auto",
+  overscrollBehavior: "contain",
 });
 
 export const Layout = (props) => {
@@ -102,6 +106,12 @@ export const Layout = (props) => {
     waiting: !swaStatus.isSuccess || swaStatus.data?.clientPrincipal === null,
   });
 
+  const featureFlags = ApiGetCall({
+    url: "/api/ListFeatureFlags",
+    queryKey: "featureFlags",
+    staleTime: 600000, // Cache for 10 minutes
+  });
+
   useEffect(() => {
     if (currentRole.isSuccess && !currentRole.isFetching) {
       const userRoles = currentRole.data?.clientPrincipal?.userRoles;
@@ -111,9 +121,24 @@ export const Layout = (props) => {
         setHideSidebar(true);
         return;
       }
+
+      // Get disabled pages from feature flags - only filter if we have valid data
+      let disabledPages = [];
+      if (featureFlags.isSuccess && Array.isArray(featureFlags.data)) {
+        disabledPages = featureFlags.data
+          .filter((flag) => flag.Enabled === false || flag.enabled === false)
+          .flatMap((flag) => flag.Pages || flag.pages || [])
+          .filter((page) => typeof page === "string");
+      }
+
       const filterItemsByRole = (items) => {
         return items
           .map((item) => {
+            // Check if page is disabled by feature flag
+            if (item.path && disabledPages.length > 0 && disabledPages.includes(item.path)) {
+              return null;
+            }
+
             // Check permission with pattern matching support
             if (item.permissions && item.permissions.length > 0) {
               const hasPermission = userPermissions?.some((userPerm) => {
@@ -169,6 +194,8 @@ export const Layout = (props) => {
     currentRole.data?.clientPrincipal?.userRoles,
     currentRole.data?.permissions,
     currentRole.isFetching,
+    featureFlags.isSuccess,
+    featureFlags.data,
   ]);
 
   const handleNavPin = useCallback(() => {
@@ -201,12 +228,24 @@ export const Layout = (props) => {
         }
         // get current devtools settings
         var showDevtools = settings.showDevtools;
-        // get current bookmarks
+        // get current bookmarks and navigation settings (device-local only)
         var bookmarks = settings.bookmarks;
+        var bookmarkSidebar = settings.bookmarkSidebar;
+        var bookmarkPopover = settings.bookmarkPopover;
+        var bookmarkReorderMode = settings.bookmarkReorderMode;
+        var bookmarkLocked = settings.bookmarkLocked;
+        var bookmarkSortOrder = settings.bookmarkSortOrder;
+        var bookmarksOpen = settings.bookmarksOpen;
 
         settings.handleUpdate({
           ...userSettingsAPI.data,
           bookmarks,
+          bookmarkSidebar,
+          bookmarkPopover,
+          bookmarkReorderMode,
+          bookmarkLocked,
+          bookmarkSortOrder,
+          bookmarksOpen,
           showDevtools,
         });
 
@@ -260,7 +299,7 @@ export const Layout = (props) => {
               message: alert.Alert,
               title: alert.title,
               toastError: alert,
-            })
+            }),
           );
         });
       }
