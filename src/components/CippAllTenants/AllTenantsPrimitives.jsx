@@ -1,15 +1,20 @@
 import {
   Box,
+  ButtonBase,
   Card,
   Chip,
+  Collapse,
   LinearProgress,
   Skeleton,
   Stack,
   Tooltip,
   Typography,
 } from '@mui/material'
+import { CippIcons } from '../../utils/icon-registry'
 import { useTheme } from '@mui/material/styles'
 import Link from 'next/link'
+import { useState } from 'react'
+import { parseCippDate } from '../../utils/parse-cipp-date'
 import {
   Area,
   AreaChart,
@@ -76,11 +81,22 @@ export const AllTenantsStatTile = ({
       >
         {isFetching ? <Skeleton width={64} /> : value}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          mt: 0.75
+        }}>
         {isFetching ? <Skeleton width="80%" /> : label}
       </Typography>
       {(meta || isFetching) && (
-        <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.disabled",
+            display: 'block',
+            mt: 0.5
+          }}>
           {isFetching ? <Skeleton width="45%" /> : meta}
         </Typography>
       )}
@@ -113,10 +129,16 @@ export const AllTenantsBarList = ({ rows = [], max, isFetching, emptyText = 'No 
 
   if (!rows.length) {
     return (
-      <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          py: 2,
+          textAlign: 'center'
+        }}>
         {emptyText}
       </Typography>
-    )
+    );
   }
 
   const scale = max ?? Math.max(...rows.map((row) => row.total ?? 0), 1)
@@ -133,7 +155,9 @@ export const AllTenantsBarList = ({ rows = [], max, isFetching, emptyText = 'No 
             alignItems: 'center',
           }}
         >
-          <Typography variant="body2" color="text.secondary" noWrap title={row.label}>
+          <Typography variant="body2" noWrap title={row.label} sx={{
+            color: "text.secondary"
+          }}>
             {row.label}
           </Typography>
           <Box
@@ -169,7 +193,7 @@ export const AllTenantsBarList = ({ rows = [], max, isFetching, emptyText = 'No 
         </Box>
       ))}
     </Stack>
-  )
+  );
 }
 
 /**
@@ -189,10 +213,16 @@ export const AllTenantsRowList = ({ rows = [], isFetching, emptyText = 'Nothing 
 
   if (!rows.length) {
     return (
-      <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          py: 2,
+          textAlign: 'center'
+        }}>
         {emptyText}
       </Typography>
-    )
+    );
   }
 
   return (
@@ -201,17 +231,16 @@ export const AllTenantsRowList = ({ rows = [], isFetching, emptyText = 'Nothing 
         <Stack
           key={row.key ?? `${row.name}-${index}`}
           direction="row"
-          alignItems="center"
           spacing={1.5}
           sx={{
+            alignItems: "center",
             px: 1.25,
             py: 1.25,
             borderRadius: 1,
             borderLeft: 3,
             borderLeftColor: severityColor(row.severity),
-            backgroundColor: 'action.hover',
-          }}
-        >
+            backgroundColor: 'action.hover'
+          }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="subtitle2" component="div" noWrap title={row.name}>
               {row.name}
@@ -223,9 +252,11 @@ export const AllTenantsRowList = ({ rows = [], isFetching, emptyText = 'Nothing 
               <Typography
                 variant="caption"
                 component="div"
-                color="text.secondary"
                 noWrap
                 title={row.detail}
+                sx={{
+                  color: "text.secondary"
+                }}
               >
                 {row.detail}
               </Typography>
@@ -243,7 +274,177 @@ export const AllTenantsRowList = ({ rows = [], isFetching, emptyText = 'Nothing 
         </Stack>
       ))}
     </Stack>
-  )
+  );
+}
+
+// Same 72-hour boundary the summary line uses, so a row reading "Oldest collection 60 hours old"
+// never expands to a collection labelled "3 days ago".
+const formatAge = (hours) => {
+  if (hours >= 72) return `${Math.round(hours / 24)} days ago`
+  if (hours >= 1) return `${Math.round(hours)} hours ago`
+  return 'under an hour ago'
+}
+
+/**
+ * The cache freshness worklist: one row per tenant that is behind, expandable to the collections
+ * holding it back and when each last ran.
+ *
+ * Scrolls rather than truncating. When a whole collection group fails estate-wide the affected
+ * tenants number in the dozens, and the previous five-row cut said "stale" without ever saying which
+ * collection or how stale — which is the only part you can act on.
+ */
+export const AllTenantsCacheList = ({
+  rows = [],
+  isFetching,
+  emptyText = 'Nothing to report',
+  maxHeight = 296,
+}) => {
+  const [expanded, setExpanded] = useState(null)
+
+  if (isFetching) {
+    return (
+      <Stack spacing={0.5}>
+        {[0, 1, 2].map((key) => (
+          <Skeleton key={key} variant="rounded" height={48} />
+        ))}
+      </Stack>
+    )
+  }
+
+  if (!rows.length) {
+    return (
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+          py: 2,
+          textAlign: 'center'
+        }}>
+        {emptyText}
+      </Typography>
+    );
+  }
+
+  return (
+    <Stack spacing={0.5} sx={{ maxHeight, overflowY: 'auto', pr: 0.5 }}>
+      {rows.map((row, index) => {
+        const key = row.domain ?? `${row.name}-${index}`
+        const isOpen = expanded === key
+        const collections = row.collections ?? []
+        const canExpand = collections.length > 0
+
+        const header = (
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{
+              alignItems: "center",
+              px: 1.25,
+              py: 1.25,
+              width: '100%'
+            }}>
+            <Box sx={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+              <Typography variant="subtitle2" component="div" noWrap title={row.name}>
+                {row.name}
+              </Typography>
+              {row.detail && (
+                <Typography
+                  variant="caption"
+                  component="div"
+                  noWrap
+                  title={row.detail}
+                  sx={{
+                    color: "text.secondary"
+                  }}
+                >
+                  {row.detail}
+                </Typography>
+              )}
+            </Box>
+            {canExpand && (
+              <>
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  color={CHIP_COLOR[row.severity] ?? 'default'}
+                  label={`${collections.length} stale`}
+                  sx={{ flexShrink: 0 }}
+                />
+                <CippIcons.ExpandMore
+                  fontSize="small"
+                  sx={{
+                    flexShrink: 0,
+                    color: 'text.secondary',
+                    transform: isOpen ? 'rotate(180deg)' : 'none',
+                    transition: 'transform 150ms',
+                  }}
+                />
+              </>
+            )}
+          </Stack>
+        )
+
+        return (
+          <Box
+            key={key}
+            sx={{
+              borderRadius: 1,
+              borderLeft: 3,
+              borderLeftColor: severityColor(row.severity),
+              backgroundColor: 'action.hover',
+            }}
+          >
+            {canExpand ? (
+              <ButtonBase
+                onClick={() => setExpanded(isOpen ? null : key)}
+                aria-expanded={isOpen}
+                sx={{ width: '100%', display: 'block', borderRadius: 1 }}
+              >
+                {header}
+              </ButtonBase>
+            ) : (
+              header
+            )}
+            <Collapse in={isOpen} unmountOnExit>
+              <Stack spacing={0.25} sx={{ px: 1.25, pb: 1.25 }}>
+                {collections.map((collection) => (
+                  <Stack
+                    key={collection.type}
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: "baseline",
+                      justifyContent: 'space-between'
+                    }}>
+                    <Typography
+                      variant="caption"
+                      component="div"
+                      noWrap
+                      title={collection.type}
+                      sx={{ minWidth: 0 }}
+                    >
+                      {collection.type}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      component="div"
+                      sx={{
+                        color: "text.secondary",
+                        flexShrink: 0,
+                        fontVariantNumeric: 'tabular-nums'
+                      }}>
+                      {parseCippDate(collection.lastRefresh).toLocaleString()} ·{' '}
+                      {formatAge(collection.ageHours)}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
+            </Collapse>
+          </Box>
+        );
+      })}
+    </Stack>
+  );
 }
 
 /** Labelled percentage meters, for pass-rate style measures. */
@@ -262,8 +463,15 @@ export const AllTenantsMeterList = ({ meters = [], isFetching }) => {
     <Stack spacing={2}>
       {meters.map((meter) => (
         <Box key={meter.label}>
-          <Stack direction="row" justifyContent="space-between" alignItems="baseline">
-            <Typography variant="body2" color="text.secondary">
+          <Stack
+            direction="row"
+            sx={{
+              justifyContent: "space-between",
+              alignItems: "baseline"
+            }}>
+            <Typography variant="body2" sx={{
+              color: "text.secondary"
+            }}>
               {meter.label}
             </Typography>
             <Typography
@@ -291,14 +499,16 @@ export const AllTenantsMeterList = ({ meters = [], isFetching }) => {
             }}
           />
           {meter.caption && (
-            <Typography variant="caption" color="text.disabled">
+            <Typography variant="caption" sx={{
+              color: "text.disabled"
+            }}>
               {meter.caption}
             </Typography>
           )}
         </Box>
       ))}
     </Stack>
-  )
+  );
 }
 
 /**
@@ -330,11 +540,13 @@ export const AllTenantsTrendChart = ({
           justifyContent: 'center',
         }}
       >
-        <Typography variant="caption" color="text.disabled">
+        <Typography variant="caption" sx={{
+          color: "text.disabled"
+        }}>
           Not enough history yet for a trend
         </Typography>
       </Box>
-    )
+    );
   }
 
   const values = points.map((point) => point.percent)
@@ -392,19 +604,21 @@ export const AllTenantsTrendChart = ({
 /** Band heading that separates the dashboard into Portfolio / Security / Operations. */
 export const AllTenantsBandHeading = ({ title, description }) => (
   <Stack
+    useFlexGap
     direction="row"
-    alignItems="baseline"
     spacing={1.5}
     sx={{
+      alignItems: "baseline",
       pb: 1,
       mb: 2,
       borderBottom: 1,
       borderColor: 'divider',
-      flexWrap: 'wrap',
-    }}
-  >
+      flexWrap: 'wrap'
+    }}>
     <Typography variant="h6">{title}</Typography>
-    <Typography variant="caption" color="text.disabled">
+    <Typography variant="caption" sx={{
+      color: "text.disabled"
+    }}>
       {description}
     </Typography>
   </Stack>

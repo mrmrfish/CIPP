@@ -1,18 +1,20 @@
 import { Box, Typography } from "@mui/material";
 import { resolveCoverImage } from "../CippPdf/resolveCoverImage";
 import { createReportStyles } from "../CippPdf/reportPdfStyles";
-import { createReportTheme } from "../CippPdf/reportTheme";
+import { applyFooterText, createReportTheme } from "../CippPdf/reportTheme";
 import {
   SAMPLE_BEC,
+  SAMPLE_LICENSING,
+  SAMPLE_MAIL_FLOW,
   SAMPLE_PERMISSIONS,
   SAMPLE_SHARING,
   SAMPLE_TENANT_NAME,
 } from "../CippPdf/previewSampleData";
 
-// The people and figures shown on the mock come from the same sample data the full-report preview
-// renders, not from a second set invented here. They used to disagree — the mock named "Jane Doe"
-// while the real preview of the same report named "Sample User" — which makes the two previews look
-// like different reports rather than two views of one.
+// The people and figures shown on the mock are the headline values of the sample data the live
+// preview renders server-side, not a second set invented here. They used to disagree — the mock
+// named "Jane Doe" while the real preview of the same report named "Sample User" — which makes the
+// two previews look like different reports rather than two views of one.
 const SAMPLE_ANALYSIS_DATE = new Date(SAMPLE_BEC.becData.ExtractedAt).toLocaleString("en-US", {
   year: "numeric",
   month: "short",
@@ -20,6 +22,15 @@ const SAMPLE_ANALYSIS_DATE = new Date(SAMPLE_BEC.becData.ExtractedAt).toLocaleSt
   hour: "2-digit",
   minute: "2-digit",
 });
+
+const SAMPLE_MAIL_FLOW_TOTAL = Object.values(SAMPLE_MAIL_FLOW.totals).reduce((a, b) => a + b, 0);
+
+// Whole units, as the licensing report quotes its headline figures.
+const usd = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+}).format;
 
 /**
  * Every report CIPP can produce, in the order they are offered everywhere: the built-in reports
@@ -37,6 +48,8 @@ export const REPORT_COVER_PRESETS = [
   {
     id: "executive",
     label: "Executive Report",
+    // Must match the name ExecPreviewBrandingReportPdf renders — cover-mock `%reportname%` uses this.
+    reportName: "Executive Summary",
     coverLabel: "Security Assessment",
     title: "Executive",
     accent: "Summary",
@@ -48,6 +61,7 @@ export const REPORT_COVER_PRESETS = [
   {
     id: "shadowAI",
     label: "Shadow AI Report",
+    reportName: "Shadow AI Report",
     coverLabel: "AI Risk Assessment",
     title: "Shadow AI",
     accent: "Report",
@@ -58,8 +72,11 @@ export const REPORT_COVER_PRESETS = [
     footer: "Confidential & Proprietary",
   },
   {
+    // The full BEC report - every page. The C-suite summary of the same investigation is `becSummary`
+    // below; both render from the same builder, so branding applied here should be checked on both.
     id: "bec",
-    label: "BEC Remediation",
+    label: "BEC Full Report",
+    reportName: "BEC Analysis Report",
     coverLabel: "Security Incident Report",
     title: "BEC Compromise",
     accent: "Analysis",
@@ -72,8 +89,25 @@ export const REPORT_COVER_PRESETS = [
     footer: "Confidential & Proprietary - For Internal Use Only",
   },
   {
+    // The C-suite summary variant of the BEC report: the executive pages only (cover + Executive
+    // Summary). It renders from the same builder as `bec` with -Variant summary, off the same sample
+    // data, so its cover matches the full report but the body is the boardroom read.
+    id: "becSummary",
+    label: "BEC C-Suite Summary",
+    reportName: "BEC Executive Summary",
+    coverLabel: "Security Incident Summary",
+    title: "BEC Compromise",
+    accent: "Summary",
+    subtitle: `Executive summary of the Business Email Compromise investigation for ${SAMPLE_TENANT_NAME}`,
+    metaPrimary: SAMPLE_BEC.userData.displayName,
+    metaSecondary: SAMPLE_BEC.userData.userPrincipalName,
+    metaTertiary: `Analysis Date: ${SAMPLE_ANALYSIS_DATE}`,
+    footer: "Confidential & Proprietary - For Internal Use Only",
+  },
+  {
     id: "sharing",
     label: "Sharing Report",
+    reportName: "Sharing Report",
     coverLabel: "Data Sharing Review",
     title: "Sharing",
     accent: "Report",
@@ -88,6 +122,7 @@ export const REPORT_COVER_PRESETS = [
   {
     id: "permissions",
     label: "Permissions Report",
+    reportName: "Permissions Report",
     coverLabel: "Access Review",
     title: "Permissions",
     accent: "Report",
@@ -98,10 +133,55 @@ export const REPORT_COVER_PRESETS = [
     footer: "Confidential — For Internal Use Only",
   },
   {
+    id: "mailFlow",
+    label: "Mail Flow Report",
+    reportName: "Mail Flow Report",
+    coverLabel: "Email Traffic Review",
+    title: "Mail Flow",
+    accent: "Report",
+    subtitle:
+      "Where email came from, how much of it was delivered, and what was stopped before it reached a mailbox.",
+    metaPrimary: SAMPLE_TENANT_NAME,
+    metaSecondary: `${SAMPLE_MAIL_FLOW_TOTAL.toLocaleString()} messages · ${SAMPLE_MAIL_FLOW.days} days · ${(
+      SAMPLE_MAIL_FLOW.totals.EmailPhish + SAMPLE_MAIL_FLOW.totals.EmailMalware
+    ).toLocaleString()} threats caught`,
+    footer: "Confidential — For Internal Use Only",
+  },
+  {
+    id: "licensing",
+    label: "Licensing Report",
+    reportName: "Licensing Report",
+    coverLabel: "Microsoft 365 Licensing Review",
+    title: "Licensing",
+    accent: "Report",
+    subtitle: `What ${SAMPLE_TENANT_NAME} pays Microsoft for each month, which of it is used, and where the same work could be done for less.`,
+    metaPrimary: SAMPLE_TENANT_NAME,
+    metaSecondary: `${SAMPLE_LICENSING.licensedUsers} people licensed · ${SAMPLE_LICENSING.plans} plans · ${usd(
+      SAMPLE_LICENSING.monthlySpend
+    )} per month`,
+    metaTertiary: `Potential saving: ${usd(SAMPLE_LICENSING.potentialAnnual)} per year`,
+    footer: "Confidential — Prepared for the leadership team",
+  },
+  {
+    id: "baseline",
+    label: "Security Baseline Report",
+    reportName: "Security Baseline Report",
+    coverLabel: "Security Baseline",
+    title: "Baseline",
+    accent: "Report",
+    subtitle:
+      "The security protections in place today, the improvements rolling out next, and the reasons behind each choice.",
+    metaPrimary: SAMPLE_TENANT_NAME,
+    metaSecondary: null,
+    footer: "Confidential & Proprietary",
+  },
+  {
     // Last: this one has no fixed content of its own — it renders whatever an operator assembles in
     // the report builder, so it belongs after the reports that are the same every time.
     id: "reportBuilder",
     label: "Report Builder",
+    // Matches the sample template name used by CippBrandingReportPreview for this report type.
+    reportName: "Quarterly Security Review",
     coverLabel: "Assessment Report",
     title: "Custom",
     accent: "Report",
@@ -127,8 +207,6 @@ const CippBrandingCoverPreview = ({
   colour,
   secondaryColour,
   coverFooterText,
-  watermarkText,
-  watermarkEnabled,
   logo,
   coverImage,
   coverImageId,
@@ -139,8 +217,6 @@ const CippBrandingCoverPreview = ({
     colour,
     secondaryColour,
     coverFooterText,
-    watermarkText,
-    watermarkEnabled,
   });
   const styles = createReportStyles(theme);
   const preset =
@@ -152,6 +228,17 @@ const CippBrandingCoverPreview = ({
     month: "long",
     day: "numeric",
   });
+  // Same substitution + length ceiling the PDF applies — without it, typing %tenantname% in
+  // branding shows the token literally in this mock while real reports resolve it.
+  const previewVariables = {
+    tenantname: SAMPLE_TENANT_NAME,
+    reportname: preset.reportName,
+    reportdate: currentDate,
+  };
+  const coverFooterLabel = applyFooterText(
+    theme.coverFooterText || preset.footer,
+    previewVariables
+  );
 
   return (
     <Box
@@ -223,38 +310,6 @@ const CippBrandingCoverPreview = ({
           {currentDate}
         </Typography>
       </Box>
-
-      {/* Same rule as the PDF: over the artwork and the text, at the same low opacity. */}
-      {theme.watermark.enabled && (
-        <Box
-          data-testid="cover-watermark"
-          sx={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            pointerEvents: "none",
-            zIndex: 2,
-          }}
-        >
-          <Box
-            component="span"
-            sx={{
-              fontSize: { xs: 44, md: 64 },
-              fontWeight: "bold",
-              color: theme.primary,
-              opacity: 0.08,
-              textTransform: "uppercase",
-              letterSpacing: 4,
-              transform: "rotate(-45deg)",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {theme.watermark.text}
-          </Box>
-        </Box>
-      )}
 
       <Box sx={{ position: "relative", zIndex: 1, flex: 1, pt: 6 }}>
         <Box
@@ -339,7 +394,7 @@ const CippBrandingCoverPreview = ({
           }}
         >
           {/* A configured cover note replaces the report's own wording, exactly as the PDF does. */}
-          {theme.coverFooterText || preset.footer}
+          {coverFooterLabel}
         </Typography>
       </Box>
     </Box>
